@@ -51,6 +51,13 @@ public:
     ~IdleRegister();
 
     void add(GSourceFunc function, gpointer data, gint priority = G_PRIORITY_DEFAULT_IDLE);
+    void add(std::function<gboolean()> function, gint priority = G_PRIORITY_DEFAULT_IDLE);
+
+    template<typename T>
+    void add(T lambda, gint priority = G_PRIORITY_DEFAULT_IDLE) {
+        add(std::function<gboolean()>(lambda), priority);
+    }
+
     void destroy();
 
 private:

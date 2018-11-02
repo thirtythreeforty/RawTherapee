@@ -71,6 +71,17 @@ void IdleRegister::add(GSourceFunc function, gpointer data, gint priority)
     mutex.unlock();
 }
 
+void IdleRegister::add(std::function<gboolean()> function, gint priority)
+{
+    using callback_t = std::function<gboolean()>;
+    auto source_func = [](void *data) {
+        auto fn = std::unique_ptr<callback_t>(static_cast<callback_t*>(data));
+        return (*fn)();
+    };
+
+    add(source_func, new callback_t(std::move(function)), priority);
+}
+
 void IdleRegister::destroy()
 {
     mutex.lock();
