@@ -39,27 +39,6 @@
 using namespace std;
 using namespace rtengine;
 
-namespace
-{
-
-struct NLParams {
-    BatchQueueListener* listener;
-    int qsize;
-    bool queueRunning;
-    bool queueError;
-    Glib::ustring queueErrorMessage;
-};
-
-int bqnotifylistenerUI (void* data)
-{
-    NLParams* params = static_cast<NLParams*>(data);
-    params->listener->queueSizeChanged (params->qsize, params->queueRunning, params->queueError, params->queueErrorMessage);
-    delete params;
-    return 0;
-}
-
-}
-
 BatchQueue::BatchQueue (FileCatalog* aFileCatalog) : processing(nullptr), fileCatalog(aFileCatalog), sequence(0), listener(nullptr)
 {
 
@@ -640,12 +619,12 @@ void BatchQueue::error(const Glib::ustring& descr)
     }
 
     if (listener) {
-        NLParams* params = new NLParams;
-        params->listener = listener;
-        params->queueRunning = false;
-        params->queueError = true;
-        params->queueErrorMessage = descr;
-        idle_register.add(bqnotifylistenerUI, params);
+        // set up capture for lambda; this is unneeded with C++14 lambda initializers
+        auto listener = this->listener;
+        idle_register.add([listener, descr] {
+            listener->queueSizeChanged(0, false, true, descr);
+            return 0;
+        });
     }
 }
 
@@ -974,17 +953,18 @@ void BatchQueue::buttonPressed (LWButton* button, int actionCode, void* actionDa
 
 void BatchQueue::notifyListener ()
 {
-    const bool queueRunning = processing;
     if (listener) {
-        NLParams* params = new NLParams;
-        params->listener = listener;
+        int qsize;
         {
             MYREADERLOCK(l, entryRW);
-            params->qsize = fd.size();
+            qsize = fd.size();
         }
-        params->queueRunning = queueRunning;
-        params->queueError = false;
-        idle_register.add(bqnotifylistenerUI, params);
+        const bool queueRunning = processing;
+        auto listener = this->listener;
+        idle_register.add([listener, qsize, queueRunning] {
+            listener->queueSizeChanged(qsize, queueRunning, false, {});
+            return 0;
+        });
     }
 }
 
